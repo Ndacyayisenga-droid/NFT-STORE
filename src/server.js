@@ -22,8 +22,12 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: `http://localhost:${PORT}`,
-        description: 'Development server'
+        url: process.env.NODE_ENV === 'production' 
+          ? 'https://nft-store.open-elements.cloud' 
+          : `http://localhost:${PORT}`,
+        description: process.env.NODE_ENV === 'production' 
+          ? 'Production server' 
+          : 'Development server'
       }
     ]
   },
@@ -33,11 +37,19 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://nft-store.open-elements.cloud', 'https://*.open-elements.cloud']
+    : true,
+  credentials: true
+}));
 app.use(express.json());
 
 // Swagger UI
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'NFT Store API Documentation'
+}));
 
 // Routes
 /**
