@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
-const { getRandomNFTs } = require('./utils/nftFetcher');
+const { getNextNFT, getUsedCidsCount, getTotalCidsCount, getCurrentIndex } = require('./utils/nftFetcher');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -155,18 +155,58 @@ app.get('/', (req, res) => {
 
 /**
  * @swagger
- * /api/random-nfts:
+ * /api/next-nft:
  *   get:
- *     summary: Get Random NFTs
- *     description: Fetches 5 random PNG NFTs from Pinata IPFS metadata
+ *     summary: Get Next NFT
+ *     description: Returns the next sequential PNG NFT from Pinata IPFS (not random)
  *     tags: [NFTs]
  *     responses:
  *       200:
- *         description: Successfully retrieved random NFTs
+ *         description: Successfully retrieved next NFT
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/NFTResponse'
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 nft:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       description: Sequential ID of the NFT
+ *                     cid:
+ *                       type: string
+ *                       description: IPFS CID of the metadata
+ *                     name:
+ *                       type: string
+ *                       description: NFT name
+ *                     creator:
+ *                       type: string
+ *                       description: NFT creator
+ *                     description:
+ *                       type: string
+ *                       description: NFT description
+ *                     imageUrl:
+ *                       type: string
+ *                       description: Direct URL to the NFT image
+ *                     attributes:
+ *                       type: array
+ *                       description: NFT attributes/traits
+ *                 stats:
+ *                   type: object
+ *                   properties:
+ *                     usedCids:
+ *                       type: integer
+ *                       description: Number of CIDs already used
+ *                     totalCids:
+ *                       type: integer
+ *                       description: Total number of CIDs available
+ *                     currentIndex:
+ *                       type: integer
+ *                       description: Current position in the CID array
  *       500:
  *         description: Server error
  *         content:
@@ -174,19 +214,25 @@ app.get('/', (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-app.get('/api/random-nfts', async (req, res) => {
+app.get('/api/next-nft', async (req, res) => {
   try {
-    const randomNFTs = await getRandomNFTs(5);
+    const nft = await getNextNFT();
+    
     res.json({
       success: true,
-      count: randomNFTs.length,
-      nfts: randomNFTs
+      message: 'Next NFT retrieved successfully',
+      nft: nft,
+      stats: {
+        usedCids: getUsedCidsCount(),
+        totalCids: getTotalCidsCount(),
+        currentIndex: getCurrentIndex()
+      }
     });
   } catch (error) {
-    console.error('Error fetching random NFTs:', error);
+    console.error('Error getting next NFT:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch NFTs',
+      message: 'Failed to get next NFT',
       error: error.message
     });
   }

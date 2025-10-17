@@ -28,6 +28,10 @@ let nftCache = null;
 let lastFetchTime = 0;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+// Track used CIDs to avoid duplicates
+let usedCids = new Set();
+let currentIndex = 0;
+
 /**
  * Fetch metadata from Pinata IPFS
  */
@@ -94,25 +98,74 @@ async function fetchAllNFTs() {
 }
 
 /**
- * Get random NFTs from the collection
+ * Get the next unused CID
  */
-async function getRandomNFTs(count = 5) {
-  const allNFTs = await fetchAllNFTs();
-  
-  if (allNFTs.length === 0) {
-    throw new Error('No PNG NFTs found');
+function getNextUnusedCID() {
+  // Find next unused CID
+  while (currentIndex < CID.length) {
+    const cid = CID[currentIndex];
+    if (!usedCids.has(cid)) {
+      return cid;
+    }
+    currentIndex++;
   }
   
-  if (allNFTs.length <= count) {
-    return allNFTs;
+  // If all CIDs are used, reset and start over
+  if (currentIndex >= CID.length) {
+    console.log('All CIDs have been used, resetting...');
+    usedCids.clear();
+    currentIndex = 0;
+    return CID[0];
   }
   
-  // Shuffle array and take first 'count' items
-  const shuffled = [...allNFTs].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
+  return null;
+}
+
+/**
+ * Get the next NFT in sequence (not random)
+ */
+async function getNextNFT() {
+  try {
+    // Get next unused CID
+    const cid = getNextUnusedCID();
+    if (!cid) {
+      throw new Error('No more CIDs available');
+    }
+
+    // Fetch metadata
+    const metadata = await fetchMetadata(cid);
+    if (!metadata) {
+      throw new Error(`Failed to fetch metadata for CID: ${cid}`);
+    }
+
+    // Check if it's a PNG NFT
+    if (!isPNGNFT(metadata)) {
+      console.log(`Skipping non-PNG NFT: ${cid}`);
+      // Mark as used and try next
+      usedCids.add(cid);
+      currentIndex++;
+      return await getNextNFT();
+    }
+
+    // Mark CID as used
+    usedCids.add(cid);
+    currentIndex++;
+
+    return {
+      id: usedCids.size,
+      cid: cid,
+      ...metadata,
+      imageUrl: `https://gateway.pinata.cloud/ipfs/${metadata.image.replace('ipfs://', '')}`
+    };
+  } catch (error) {
+    console.error('Error getting next NFT:', error);
+    throw error;
+  }
 }
 
 module.exports = {
-  getRandomNFTs,
-  fetchAllNFTs
+  getNextNFT,
+  getUsedCidsCount: () => usedCids.size,
+  getTotalCidsCount: () => CID.length,
+  getCurrentIndex: () => currentIndex
 };
